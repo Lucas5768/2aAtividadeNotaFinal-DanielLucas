@@ -1,0 +1,193 @@
+<?php
+// Conexão com banco SQLite
+$db = new PDO("sqlite:" . __DIR__ . "/tarefas.db");
+$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+// Criação da tabela
+$db->exec("CREATE TABLE IF NOT EXISTS tarefas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    descricao TEXT NOT NULL,
+    vencimento DATE NOT NULL,
+    concluida INTEGER DEFAULT 0
+)");
+
+// Adicionar nova tarefa
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $descricao = trim($_POST['descricao'] ?? '');
+    $vencimento = $_POST['vencimento'] ?? '';
+
+    if ($descricao && $vencimento) {
+        $stmt = $db->prepare("INSERT INTO tarefas (descricao, vencimento) VALUES (?, ?)");
+        $stmt->execute([$descricao, $vencimento]);
+        header("Location: " . $_SERVER['PHP_SELF']);
+        exit;
+    }
+}
+
+// Marcar como concluída
+if (isset($_GET['concluir'])) {
+    $id = (int) $_GET['concluir'];
+    $db->exec("UPDATE tarefas SET concluida = 1 WHERE id = $id");
+    header("Location: " . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+// Excluir tarefa
+if (isset($_GET['excluir'])) {
+    $id = (int) $_GET['excluir'];
+    $db->exec("DELETE FROM tarefas WHERE id = $id");
+    header("Location: " . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+// Buscar tarefas
+$pendentes = $db->query("SELECT * FROM tarefas WHERE concluida = 0 ORDER BY vencimento ASC")->fetchAll(PDO::FETCH_ASSOC);
+$concluidas = $db->query("SELECT * FROM tarefas WHERE concluida = 1 ORDER BY vencimento DESC")->fetchAll(PDO::FETCH_ASSOC);
+?>
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerenciador de Tarefas</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(to right, #e3f2fd, #ffffff);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: #fff;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        h2, h3 {
+            text-align: center;
+            color: #333;
+        }
+
+        form {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        input[type="text"],
+        input[type="date"] {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            margin-top: 15px;
+            padding: 12px;
+            background: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        li {
+            background: #f8f9fa;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-left: 5px solid #007BFF;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .acoes a {
+            text-decoration: none;
+            margin-left: 10px;
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .acoes a:hover {
+            text-decoration: underline;
+        }
+
+        .concluida {
+            text-decoration: line-through;
+            color: #6c757d;
+        }
+
+        .data {
+            font-size: 0.9em;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Gerenciador de Tarefas</h2>
+
+        <form method="POST">
+            <label for="descricao">Descrição da Tarefa:</label>
+            <input type="text" name="descricao" id="descricao" required>
+
+            <label for="vencimento">Data de Vencimento:</label>
+            <input type="date" name="vencimento" id="vencimento" required>
+
+            <button type="submit">Adicionar Tarefa</button>
+        </form>
+
+        <h3>Tarefas Pendentes</h3>
+        <ul>
+            <?php foreach ($pendentes as $tarefa): ?>
+                <li>
+                    <div>
+                        <strong><?= htmlspecialchars($tarefa['descricao']) ?></strong>
+                        <div class="data">Vence em: <?= date('d/m/Y', strtotime($tarefa['vencimento'])) ?></div>
+                    </div>
+                    <div class="acoes">
+                        <a href="?concluir=<?= $tarefa['id'] ?>">✔️ Concluir</a>
+                        <a href="?excluir=<?= $tarefa['id'] ?>" onclick="return confirm('Deseja excluir esta tarefa?')">❌</a>
+                    </div>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+
+        <h3>Tarefas Concluídas</h3>
+        <ul>
+            <?php foreach ($concluidas as $tarefa): ?>
+                <li class="concluida">
+                    <div>
+                        <?= htmlspecialchars($tarefa['descricao']) ?>
+                        <div class="data">(Venc. <?= date('d/m/Y', strtotime($tarefa['vencimento'])) ?>)</div>
+                    </div>
+                    <div class="acoes">
+                        <a href="?excluir=<?= $tarefa['id'] ?>" onclick="return confirm('Excluir tarefa concluída?')">❌</a>
+                    </div>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+</body>
+</html>
